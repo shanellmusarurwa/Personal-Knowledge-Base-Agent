@@ -2,7 +2,7 @@
 
 import * as pdfParse from "pdf-parse";
 import { embed } from "@/lib/embed";
-import { getTable } from "@/lib/vectordb";
+import { addToDB } from "@/lib/vectordb";
 
 export async function POST(req) {
   try {
@@ -24,18 +24,18 @@ export async function POST(req) {
     // Split text into chunks
     const chunks = text.match(/(.|[\r\n]){1,500}/g) || [];
 
-    const table = await getTable();
+    const items = [];
 
     for (const chunk of chunks) {
       const vector = await embed(chunk);
 
-      await table.add([
-        {
-          vector: vector,
-          text: chunk,
-        },
-      ]);
+      items.push({
+        vector,
+        text: chunk,
+      });
     }
+
+    await addToDB(items);
 
     return Response.json({ success: true });
   } catch (err) {

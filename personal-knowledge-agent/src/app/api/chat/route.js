@@ -42,8 +42,7 @@ ${question}
 
     return new Response(
       JSON.stringify({
-        answer: response.text,
-        context,
+        answer: response.text || "No response generated",
       }),
       { status: 200 },
     );

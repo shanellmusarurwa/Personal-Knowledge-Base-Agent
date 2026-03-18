@@ -1,9 +1,37 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 
 export default function ChatInterface() {
   const [question, setQuestion] = useState("");
   const [answer, setAnswer] = useState("");
+
+  // 📜 Load history
+  useEffect(() => {
+    const saved = localStorage.getItem("lastAnswer");
+    if (saved) setAnswer(saved);
+  }, []);
+
+  // 📜 Save history
+  useEffect(() => {
+    if (answer) {
+      localStorage.setItem("lastAnswer", answer);
+    }
+  }, [answer]);
+
+  // ✨ Typing effect
+  function typeEffect(text) {
+    let i = 0;
+    let current = "";
+
+    const interval = setInterval(() => {
+      current += text[i];
+      i++;
+
+      setAnswer(current);
+
+      if (i >= text.length) clearInterval(interval);
+    }, 15);
+  }
 
   async function ask() {
     const res = await fetch("/api/chat", {
@@ -14,12 +42,15 @@ export default function ChatInterface() {
 
     const data = await res.json();
 
-    setAnswer(data.answer);
+    setAnswer(""); // clear first
+
+    // 🧠 simulate streaming via typing
+    typeEffect(data.answer || "No response");
   }
 
   return (
     <div style={{ marginTop: "40px" }}>
-      <h2>Ask Question</h2>
+      <h2 style={{ color: "black" }}>Ask Question</h2>
 
       <input
         value={question}
@@ -27,8 +58,10 @@ export default function ChatInterface() {
         placeholder="Ask something..."
         style={{
           padding: "10px",
+          borderRadius: "50px",
           width: "300px",
           marginRight: "10px",
+          color: "black",
         }}
       />
 
@@ -36,7 +69,7 @@ export default function ChatInterface() {
         onClick={ask}
         style={{
           padding: "10px 25px",
-          borderRadius: "50px", // pill shape
+          borderRadius: "50px",
           background: "#3e8e7e",
           color: "white",
           border: "none",
@@ -45,7 +78,10 @@ export default function ChatInterface() {
         Ask
       </button>
 
-      <p style={{ marginTop: "20px" }}>{answer}</p>
+      {/* 🧠 Answer */}
+      <p style={{ marginTop: "20px", color: "black", whiteSpace: "pre-wrap" }}>
+        {answer}
+      </p>
     </div>
   );
 }

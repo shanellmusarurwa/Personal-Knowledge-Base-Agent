@@ -55,7 +55,7 @@ export default function UploadDocuments() {
 
         {/* RIGHT SIDE */}
         <div className="uploaded-files">
-          <h3>Uploaded Files</h3>
+          <h3 style={{ color: "black" }}>Uploaded Files</h3>
 
           {files.map((file, i) => (
             <div key={i} className="file-item">
