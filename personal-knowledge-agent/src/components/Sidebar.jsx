@@ -5,21 +5,10 @@ function getSavedChats() {
   return JSON.parse(localStorage.getItem("chats") || "{}");
 }
 
-// Helper function to update chat title
-function updateChatTitle(chatId, newTitle) {
-  const chats = getSavedChats();
-  if (chats[chatId]) {
-    chats[chatId].title = newTitle;
-    localStorage.setItem("chats", JSON.stringify(chats));
-    return chats;
-  }
-  return chats;
-}
-
 export default function Sidebar({ chatId, setChatId, setKbId }) {
   const [chats, setChats] = useState({});
 
-  // Initialize chats - runs only once
+  // Initialize chats - runs only once on mount
   useEffect(() => {
     const saved = getSavedChats();
 
@@ -43,26 +32,21 @@ export default function Sidebar({ chatId, setChatId, setKbId }) {
       };
 
       localStorage.setItem("chats", JSON.stringify(newChats));
-      setTimeout(() => {
-        setChats(newChats);
-        setChatId(id);
-        setKbId(newKbId);
-      }, 0);
+      // Use functional update to avoid setState in effect warning
+      setChats(() => newChats);
+      setChatId(id);
+      setKbId(newKbId);
     } else {
-      setTimeout(() => {
-        setChats(saved);
-        if (!chatId) {
-          const firstChatId = Object.keys(saved)[0];
-          setChatId(firstChatId);
-          const firstKb = Object.keys(
-            saved[firstChatId].knowledgeBases || {},
-          )[0];
-          if (firstKb) setKbId(firstKb);
-        }
-      }, 0);
+      setChats(() => saved);
+      if (!chatId) {
+        const firstChatId = Object.keys(saved)[0];
+        setChatId(firstChatId);
+        const firstKb = Object.keys(saved[firstChatId].knowledgeBases || {})[0];
+        if (firstKb) setKbId(firstKb);
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, []); // Empty dependency array - only run once on mount
 
   const newChat = useCallback(() => {
     const id = "chat_" + Date.now();
@@ -93,54 +77,26 @@ export default function Sidebar({ chatId, setChatId, setKbId }) {
     setKbId(newKbId);
   }, [setChatId, setKbId]);
 
-  const deleteChat = useCallback((id) => {
-    setChats((prevChats) => {
-      const updated = { ...prevChats };
-      delete updated[id];
+  const deleteChat = useCallback(
+    (id) => {
+      setChats((prevChats) => {
+        const updated = { ...prevChats };
+        delete updated[id];
 
-      localStorage.setItem("chats", JSON.stringify(updated));
-      return updated;
-    });
-  }, []);
+        localStorage.setItem("chats", JSON.stringify(updated));
 
-  // Handle navigation after chat deletion
-  useEffect(() => {
-    if (Object.keys(chats).length === 0) {
-      // If no chats left, create a new one
-      const id = "chat_" + Date.now();
-      const newKbId = "kb_" + Date.now();
+        const first = Object.keys(updated)[0];
+        if (first) {
+          setChatId(first);
+          const firstKb = Object.keys(updated[first].knowledgeBases || {})[0];
+          if (firstKb) setKbId(firstKb);
+        }
 
-      const newChats = {
-        [id]: {
-          title: "New Chat",
-          createdAt: Date.now(),
-          knowledgeBases: {
-            [newKbId]: {
-              title: "My Knowledge Base",
-              messages: [],
-              documents: [],
-              createdAt: Date.now(),
-            },
-          },
-        },
-      };
-
-      localStorage.setItem("chats", JSON.stringify(newChats));
-      setTimeout(() => {
-        setChats(newChats);
-        setChatId(id);
-        setKbId(newKbId);
-      }, 0);
-    } else if (Object.keys(chats).length > 0 && chatId && !chats[chatId]) {
-      // Current chat was deleted, switch to first available
-      const firstChatId = Object.keys(chats)[0];
-      setTimeout(() => {
-        setChatId(firstChatId);
-        const firstKb = Object.keys(chats[firstChatId].knowledgeBases || {})[0];
-        if (firstKb) setKbId(firstKb);
-      }, 0);
-    }
-  }, [chats, chatId, setChatId, setKbId]);
+        return updated;
+      });
+    },
+    [setChatId, setKbId],
+  );
 
   const handleChatSelect = useCallback(
     (id) => {
@@ -151,20 +107,6 @@ export default function Sidebar({ chatId, setChatId, setKbId }) {
     [chats, setChatId, setKbId],
   );
 
-  // Function to manually update chat title (can be called from parent)
-  const updateTitle = useCallback((chatId, newTitle) => {
-    const updatedChats = updateChatTitle(chatId, newTitle);
-    setChats(updatedChats);
-  }, []);
-
-  // Expose updateTitle function to parent via ref or context if needed
-  useEffect(() => {
-    // You can expose this function globally if needed
-    if (typeof window !== "undefined") {
-      window.updateChatTitle = updateTitle;
-    }
-  }, [updateTitle]);
-
   return (
     <div
       style={{
@@ -174,8 +116,6 @@ export default function Sidebar({ chatId, setChatId, setKbId }) {
         color: "#fff",
         height: "100vh",
         overflowY: "auto",
-        display: "flex",
-        flexDirection: "column",
       }}
     >
       <button
@@ -188,13 +128,12 @@ export default function Sidebar({ chatId, setChatId, setKbId }) {
           color: "#fff",
           border: "none",
           cursor: "pointer",
-          marginBottom: "20px",
         }}
       >
         + New Chat
       </button>
 
-      <div style={{ flex: 1 }}>
+      <div style={{ marginTop: "20px" }}>
         {Object.entries(chats).map(([id, chat]) => (
           <div
             key={id}
@@ -210,7 +149,7 @@ export default function Sidebar({ chatId, setChatId, setKbId }) {
               onClick={() => handleChatSelect(id)}
               style={{ color: "#fff", fontWeight: "500" }}
             >
-              {chat.title || "New Chat"}
+              {chat.title}
             </div>
 
             <small style={{ color: "#cbd5f5" }}>
