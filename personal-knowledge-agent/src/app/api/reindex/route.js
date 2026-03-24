@@ -1,34 +1,66 @@
-// app/api/reindex/route.js
-import fs from "fs";
-import path from "path";
-import { ingestDocument } from "@/lib/ingestDocument";
+import { NextResponse } from "next/server";
+import { CloudClient } from "chromadb";
 
-export async function POST() {
+const chromaClient = new CloudClient({
+  apiKey: process.env.CHROMA_API_KEY,
+  tenant: process.env.CHROMA_TENANT,
+  database: process.env.CHROMA_DATABASE,
+});
+
+export async function POST(req) {
   try {
-    const uploadsDir = path.join(process.cwd(), "uploads");
-    if (!fs.existsSync(uploadsDir)) {
-      return new Response(
-        JSON.stringify({ error: "Uploads folder not found" }),
+    const { chatId, kbId } = await req.json();
+
+    if (!chatId || !kbId) {
+      return NextResponse.json(
+        { error: "Missing chatId or kbId" },
         { status: 400 },
       );
     }
 
-    const files = fs.readdirSync(uploadsDir);
+    const collectionName = `chat-${chatId}-kb-${kbId}`;
 
-    for (const file of files) {
-      const filePath = path.join(uploadsDir, file);
-      const text = fs.readFileSync(filePath, "utf8");
-      await ingestDocument(text);
+    // Check if collection exists
+    let collection;
+    try {
+      collection = await chromaClient.getCollection({ name: collectionName });
+    } catch (err) {
+      return NextResponse.json(
+        { error: "Knowledge base not found", success: false },
+        { status: 404 },
+      );
     }
 
-    return new Response(
-      JSON.stringify({ message: "Knowledge base re-indexed successfully" }),
-      { status: 200 },
-    );
+    // Get all documents in the collection
+    const allDocs = await collection.get();
+
+    if (!allDocs.ids || allDocs.ids.length === 0) {
+      return NextResponse.json({
+        success: true,
+        message: "No documents to reindex",
+        documentsReindexed: 0,
+      });
+    }
+
+    // Reindex by re-adding all documents with the same IDs
+    // This effectively refreshes the embeddings
+    await collection.add({
+      ids: allDocs.ids,
+      documents: allDocs.documents,
+      metadatas: allDocs.metadatas,
+    });
+
+    return NextResponse.json({
+      success: true,
+      message: "Knowledge base reindexed successfully",
+      documentsReindexed: allDocs.ids.length,
+      collection: collectionName,
+    });
   } catch (err) {
     console.error("REINDEX ERROR:", err);
-    return new Response(JSON.stringify({ error: err.message }), {
-      status: 500,
-    });
+    return NextResponse.json(
+      { error: err.message || "Reindex failed", success: false },
+      { status: 500 },
+    );
   }
 }

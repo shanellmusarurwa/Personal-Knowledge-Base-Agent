@@ -7,15 +7,13 @@ export const metadata = {
   title: "Personal Knowledge Base Agent",
   description: "RAG Agent built with Next.js and OpenRouter AI",
 };
-
 export default function RootLayout({ children }) {
   return (
     <html lang="en">
-      <body style={{ display: "flex", minHeight: "100vh" }}>
-        {/* Sidebar always visible */}
-        <Sidebar />
-
-        {/* Main content */}
+      <body
+        suppressHydrationWarning
+        style={{ display: "flex", minHeight: "100vh" }}
+      >
         <main style={{ flex: 1, padding: "20px", background: "#f7f7f7" }}>
           {children}
         </main>
