@@ -12,6 +12,24 @@ export default function Home() {
   const [testResults, setTestResults] = useState([]);
   const [isTesting, setIsTesting] = useState(false);
 
+  // Inspect saved data function
+  const inspectSavedData = () => {
+    const chats = JSON.parse(localStorage.getItem("chats") || "{}");
+    console.log("All saved chats:", chats);
+
+    if (chatId && kbId) {
+      const currentChat = chats[chatId];
+      const currentKB = currentChat?.knowledgeBases?.[kbId];
+      console.log("Current chat:", currentChat);
+      console.log("Current KB messages:", currentKB?.messages);
+      console.log("Messages count:", currentKB?.messages?.length || 0);
+    }
+
+    const messageCount =
+      chats[chatId]?.knowledgeBases?.[kbId]?.messages?.length || 0;
+    alert(`Check console for saved data.\nMessages count: ${messageCount}`);
+  };
+
   // Run tests function
   const runTests = async () => {
     if (!chatId || !kbId) {
@@ -110,16 +128,78 @@ export default function Home() {
           background: "#ffffff",
         }}
       >
-        {/* 🧠 HEADER */}
+        {/* 🧠 HEADER with Test Button and Debug Button */}
         <div
           style={{
             padding: "15px 20px",
             borderBottom: "1px solid #eee",
             fontWeight: "600",
             color: "#000",
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "center",
           }}
         >
-          RAG AI Assistant
+          <span>RAG AI Assistant</span>
+
+          <div style={{ display: "flex", gap: "10px" }}>
+            {/* Debug Button */}
+            {chatId && (
+              <button
+                onClick={inspectSavedData}
+                style={{
+                  padding: "8px 16px",
+                  backgroundColor: "#666",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "20px",
+                  cursor: "pointer",
+                  fontSize: "12px",
+                  transition: "all 0.3s ease",
+                }}
+                onMouseEnter={(e) => {
+                  e.target.style.backgroundColor = "#555";
+                }}
+                onMouseLeave={(e) => {
+                  e.target.style.backgroundColor = "#666";
+                }}
+              >
+                🔍 Debug
+              </button>
+            )}
+
+            {/* Test Button */}
+            {chatId && (
+              <button
+                onClick={runTests}
+                disabled={isTesting || !kbId}
+                style={{
+                  padding: "8px 20px",
+                  backgroundColor: isTesting ? "#ccc" : "#3e8e7e",
+                  color: "white",
+                  border: "none",
+                  borderRadius: "20px",
+                  cursor: isTesting || !kbId ? "not-allowed" : "pointer",
+                  fontWeight: "bold",
+                  fontSize: "14px",
+                  opacity: isTesting || !kbId ? 0.6 : 1,
+                  transition: "all 0.3s ease",
+                }}
+                onMouseEnter={(e) => {
+                  if (!isTesting && kbId) {
+                    e.target.style.backgroundColor = "#2e6e62";
+                  }
+                }}
+                onMouseLeave={(e) => {
+                  if (!isTesting && kbId) {
+                    e.target.style.backgroundColor = "#3e8e7e";
+                  }
+                }}
+              >
+                {isTesting ? "⏳ Testing..." : "🧪 Run Tests"}
+              </button>
+            )}
+          </div>
         </div>
 
         {/* 📭 EMPTY STATE */}
@@ -276,29 +356,6 @@ export default function Home() {
           </div>
         </div>
       )}
-
-      {/* Test Button */}
-      <button
-        onClick={runTests}
-        disabled={isTesting || !chatId || !kbId}
-        style={{
-          position: "fixed",
-          bottom: "20px",
-          right: "20px",
-          padding: "12px 24px",
-          backgroundColor: isTesting ? "#ccc" : "#3e8e7e",
-          color: "white",
-          border: "none",
-          borderRadius: "25px",
-          cursor: isTesting || !chatId || !kbId ? "not-allowed" : "pointer",
-          fontWeight: "bold",
-          zIndex: 100,
-          boxShadow: "0 2px 10px rgba(0,0,0,0.2)",
-          opacity: isTesting || !chatId || !kbId ? 0.6 : 1,
-        }}
-      >
-        {isTesting ? "Running Tests..." : "🧪 Run Tests"}
-      </button>
     </div>
   );
 }

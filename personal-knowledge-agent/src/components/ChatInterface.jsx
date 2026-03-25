@@ -7,12 +7,70 @@ function loadMessages(chatId, kbId) {
   const chats = JSON.parse(localStorage.getItem("chats") || "{}");
   const chat = chats[chatId];
 
+  console.log("Loading messages for:", { chatId, kbId });
+  console.log("Found chat:", chat);
+
   if (chat && chat.knowledgeBases && chat.knowledgeBases[kbId]) {
-    return chat.knowledgeBases[kbId].messages || [];
+    const messages = chat.knowledgeBases[kbId].messages || [];
+    console.log("Loaded messages:", messages.length);
+    return messages;
   }
 
   return [];
 }
+
+// Save chat function with proper title handling
+const saveChat = (chatId, kbId, userMsg, aiResponse) => {
+  console.log("Saving chat:", { chatId, kbId, userMsg, aiResponse });
+
+  const chats = JSON.parse(localStorage.getItem("chats") || "{}");
+  console.log("Existing chats:", Object.keys(chats));
+
+  if (!chats[chatId]) {
+    chats[chatId] = {
+      title: "New Chat",
+      knowledgeBases: {},
+      createdAt: Date.now(),
+    };
+    console.log("Created new chat:", chatId);
+  }
+
+  if (!chats[chatId].knowledgeBases[kbId]) {
+    chats[chatId].knowledgeBases[kbId] = {
+      title: "Knowledge Base",
+      messages: [],
+      documents: [],
+    };
+    console.log("Created new knowledge base:", kbId);
+  }
+
+  // Get existing messages
+  const existingMessages = chats[chatId].knowledgeBases[kbId].messages || [];
+  console.log("Existing messages count:", existingMessages.length);
+
+  // Add new messages
+  const updatedMessages = [...existingMessages, userMsg, aiResponse];
+
+  console.log("Updated messages count:", updatedMessages.length);
+
+  chats[chatId].knowledgeBases[kbId].messages = updatedMessages;
+
+  // Update chat title based on first user message
+  if (chats[chatId].title === "New Chat" && userMsg.content) {
+    chats[chatId].title = userMsg.content.slice(0, 30);
+    console.log("Updated chat title to:", chats[chatId].title);
+  }
+
+  localStorage.setItem("chats", JSON.stringify(chats));
+  console.log("Chat saved successfully!");
+
+  // Trigger storage event to update sidebar
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(new Event("storage"));
+  }
+
+  return chats;
+};
 
 export default function ChatInterface({ chatId, kbId, setKbId }) {
   const [question, setQuestion] = useState("");
@@ -22,6 +80,7 @@ export default function ChatInterface({ chatId, kbId, setKbId }) {
   const [knowledgeBases, setKnowledgeBases] = useState([]);
   const bottomRef = useRef(null);
 
+  // Load knowledge bases for this chat
   useEffect(() => {
     if (chatId) {
       const chats = JSON.parse(localStorage.getItem("chats") || "{}");
@@ -32,10 +91,27 @@ export default function ChatInterface({ chatId, kbId, setKbId }) {
     }
   }, [chatId]);
 
+  // Load messages when kbId changes
   useEffect(() => {
     if (chatId && kbId) {
-      setMessages(loadMessages(chatId, kbId));
+      const loadedMessages = loadMessages(chatId, kbId);
+      console.log("Setting messages:", loadedMessages.length);
+      setMessages(loadedMessages);
     }
+  }, [chatId, kbId]);
+
+  // Listen for storage changes to update messages
+  useEffect(() => {
+    const handleStorageChange = () => {
+      if (chatId && kbId) {
+        console.log("Storage event detected, reloading messages...");
+        const updatedMessages = loadMessages(chatId, kbId);
+        setMessages(updatedMessages);
+      }
+    };
+
+    window.addEventListener("storage", handleStorageChange);
+    return () => window.removeEventListener("storage", handleStorageChange);
   }, [chatId, kbId]);
 
   useEffect(() => {
@@ -46,11 +122,13 @@ export default function ChatInterface({ chatId, kbId, setKbId }) {
     if (!question.trim() || loading || !kbId) return;
 
     const userMsg = { role: "user", content: question };
+    console.log("User message:", userMsg);
 
     setLoading(true);
     const currentQuestion = question;
     setQuestion("");
 
+    // Add user message instantly
     setMessages((prev) => [...prev, userMsg]);
 
     try {
@@ -74,11 +152,13 @@ export default function ChatInterface({ chatId, kbId, setKbId }) {
       });
 
       const data = await res.json();
+      console.log("API Response:", data);
 
       if (!data.success) {
         throw new Error(data.error || "Failed to get response");
       }
 
+      // Add empty AI message for streaming
       setMessages((prev) => [
         ...prev,
         {
@@ -89,6 +169,7 @@ export default function ChatInterface({ chatId, kbId, setKbId }) {
         },
       ]);
 
+      // Streaming effect
       const words = data.answer.split(" ");
       let current = "";
 
@@ -98,56 +179,43 @@ export default function ChatInterface({ chatId, kbId, setKbId }) {
 
         setMessages((prev) => {
           const updated = [...prev];
-          updated[updated.length - 1] = {
-            ...updated[updated.length - 1],
-            content: current,
-          };
+          if (updated.length > 0) {
+            updated[updated.length - 1] = {
+              ...updated[updated.length - 1],
+              content: current,
+            };
+          }
           return updated;
         });
       }
 
-      const chats = JSON.parse(localStorage.getItem("chats") || "{}");
+      // Create final AI response object
+      const aiResponse = {
+        role: "ai",
+        content: current,
+        sources: data.sources || [],
+        document: data.document || "Unknown document",
+      };
 
-      if (!chats[chatId]) {
-        chats[chatId] = { title: "New Chat", knowledgeBases: {} };
-      }
+      console.log("AI Response:", aiResponse);
 
-      if (!chats[chatId].knowledgeBases[kbId]) {
-        chats[chatId].knowledgeBases[kbId] = {
-          title: "Knowledge Base",
-          messages: [],
-          documents: [],
-        };
-      }
+      // Save chat using the saveChat function
+      saveChat(chatId, kbId, userMsg, aiResponse);
 
-      const updatedMessages = [
-        ...chats[chatId].knowledgeBases[kbId].messages,
-        userMsg,
-        {
-          role: "ai",
-          content: current,
-          sources: data.sources || [],
-          document: data.document || "Unknown document",
-        },
-      ];
-
-      chats[chatId].knowledgeBases[kbId].messages = updatedMessages;
-
-      if (chats[chatId].title === "New Chat") {
-        chats[chatId].title = userMsg.content.slice(0, 30);
-      }
-
-      localStorage.setItem("chats", JSON.stringify(chats));
+      console.log("Chat saved successfully!");
     } catch (err) {
-      console.error(err);
+      console.error("Error in ask function:", err);
 
-      setMessages((prev) => [
-        ...prev,
-        {
-          role: "ai",
-          content: `❌ Error: ${err.message}`,
-        },
-      ]);
+      const errorMsg = {
+        role: "ai",
+        content: `❌ Error: ${err.message}`,
+      };
+
+      setMessages((prev) => [...prev, errorMsg]);
+
+      // Save error message too
+      const userMsgForError = { role: "user", content: currentQuestion };
+      saveChat(chatId, kbId, userMsgForError, errorMsg);
     }
 
     setLoading(false);
@@ -194,7 +262,9 @@ export default function ChatInterface({ chatId, kbId, setKbId }) {
                   msg.role === "user" ? "bg-[#3e8e7e]" : "bg-[#2e6e62]"
                 }`}
               >
-                <div>{msg.content}</div>
+                <div style={{ whiteSpace: "pre-wrap", wordWrap: "break-word" }}>
+                  {msg.content}
+                </div>
 
                 {msg.document && msg.role === "ai" && (
                   <div className="mt-2 text-xs text-yellow-300">

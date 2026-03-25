@@ -1,16 +1,14 @@
 "use client";
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 
 export default function UploadDocuments({ chatId, kbId }) {
   const [files, setFiles] = useState([]);
-  const isInitialLoad = useRef(true);
 
-  // ✅ LOAD saved files for specific chat and knowledge base
+  // LOAD saved files for this specific chat and knowledge base
   useEffect(() => {
     if (typeof window !== "undefined" && chatId && kbId) {
       const saved = localStorage.getItem(`uploadedFiles_${chatId}_${kbId}`);
       if (saved) {
-        // Use setTimeout to move setState out of the effect's synchronous flow
         setTimeout(() => {
           setFiles(JSON.parse(saved));
         }, 0);
@@ -20,18 +18,26 @@ export default function UploadDocuments({ chatId, kbId }) {
         }, 0);
       }
     }
-  }, [chatId, kbId]);
+  }, [chatId, kbId]); // Only depends on chatId and kbId, not files
 
-  // ✅ SAVE files whenever they change to specific chat/kb
+  // SAVE files whenever they change to specific chat/kb
   useEffect(() => {
-    if (chatId && kbId && !isInitialLoad.current) {
+    if (chatId && kbId) {
       localStorage.setItem(
         `uploadedFiles_${chatId}_${kbId}`,
         JSON.stringify(files),
       );
-    }
-    if (isInitialLoad.current) {
-      isInitialLoad.current = false;
+
+      // Update the knowledge base document count in chats
+      const chats = JSON.parse(localStorage.getItem("chats") || "{}");
+      if (
+        chats[chatId] &&
+        chats[chatId].knowledgeBases &&
+        chats[chatId].knowledgeBases[kbId]
+      ) {
+        chats[chatId].knowledgeBases[kbId].documents = files;
+        localStorage.setItem("chats", JSON.stringify(chats));
+      }
     }
   }, [files, chatId, kbId]);
 
@@ -98,7 +104,6 @@ export default function UploadDocuments({ chatId, kbId }) {
     setFiles(updated);
   };
 
-  // Show message if no knowledge base selected
   if (!chatId || !kbId) {
     return (
       <div className="upload-wrapper">
@@ -114,18 +119,14 @@ export default function UploadDocuments({ chatId, kbId }) {
   return (
     <div className="upload-wrapper">
       <div className="upload-card">
-        {/* LEFT SIDE */}
         <div
           className="upload-box"
           onDrop={handleDrop}
           onDragOver={(e) => e.preventDefault()}
         >
           <div className="upload-icon">☁️</div>
-
           <p className="drag-text">Drag and drop files here</p>
-
           <p className="or">- OR -</p>
-
           <label className="upload-btn">
             Browse Files
             <input
@@ -138,10 +139,8 @@ export default function UploadDocuments({ chatId, kbId }) {
           </label>
         </div>
 
-        {/* RIGHT SIDE */}
         <div className="uploaded-files">
-          <h3 style={{ color: "black" }}>Uploaded Files</h3>
-
+          <h3 style={{ color: "black" }}>Uploaded Files ({files.length})</h3>
           {files.length === 0 ? (
             <p style={{ color: "#999", textAlign: "center", padding: "20px" }}>
               No files uploaded yet
@@ -151,7 +150,6 @@ export default function UploadDocuments({ chatId, kbId }) {
               <div key={i} className="file-item">
                 <span className="file-name">{file.name}</span>
                 <span className="file-status">{file.status}</span>
-
                 <button
                   onClick={() => deleteFile(i)}
                   style={{
